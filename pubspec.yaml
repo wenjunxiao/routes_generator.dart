@@ -1,0 +1,15 @@
+name: routes_generator
+description: Automatically builder routes for pages.
+version: 0.0.1
+homepage: https://github.com/wenjunxiao/routes_generator.dart
+
+environment:
+  sdk: ">=2.7.0 <3.0.0"
+
+dependencies:
+  analyzer: ^0.39.3
+  build: '>=0.12.6 <2.0.0'
+  build_config: '>=0.2.6 <0.5.0'
+  path: ^1.3.2
+  glob: ^1.1.0
+  source_gen: ^0.9.0

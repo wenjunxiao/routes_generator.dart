@@ -1,0 +1,20 @@
+# Read about `build.yaml` at https://pub.dartlang.org/packages/build_config
+targets:
+  $default:
+    builders:
+      routes_generator:
+        options:
+          routes.dart:
+            name: "routes"
+            pages: "pages"
+          dev/routes.dart:
+            name: "devRoutes"
+            pages: "pages"
+
+builders:
+  routes_generator:
+    import: "package:routes_generator/routes_generator.dart"
+    builder_factories: ["routesBuilder"]
+    build_extensions: {".dart": [".map.dart"]}
+    build_to: source # 构建输出:cache-缓存，不生成文件;source-生成源文件
+    auto_apply: dependents
