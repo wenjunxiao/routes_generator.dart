@@ -4,12 +4,19 @@ targets:
     builders:
       routes_generator:
         options:
-          routes.dart:
-            name: "routes"
-            pages: "pages"
-          dev/routes.dart:
-            name: "devRoutes"
-            pages: "pages"
+          group: '_RoutesGroup.name'
+          ignores: '**.g.dart'
+          routes:
+            routes.dart:
+              name: "routes"
+              pages: "pages"
+              group: '_RoutesGroup.name'
+              ignores: '**/ignores/**'
+            dev/routes.dart:
+              name: "devRoutes"
+              pages: "pages"
+              group: '_RoutesGroup.name'
+              ignores: '**/ignores/**'
 
 builders:
   routes_generator:
