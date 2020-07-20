@@ -12,11 +12,13 @@ targets:
               pages: "pages"
               group: '_RoutesGroup.name'
               ignores: '**/ignores/**'
+              dynamic: 'Dynamic'
             dev/routes.dart:
               name: "devRoutes"
               pages: "pages"
               group: '_RoutesGroup.name'
               ignores: '**/ignores/**'
+              dynamic: 'Dynamic'
 
 builders:
   routes_generator:

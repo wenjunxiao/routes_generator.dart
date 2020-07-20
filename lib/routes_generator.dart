@@ -21,6 +21,7 @@ Builder routesBuilder([BuilderOptions options]) {
         routes: routes,
         group: config['group'],
         ignores: ensureList(config['ignores']),
+        matcher: config['matcher'],
       ),
       generatedExtension: config['ext'] ?? '.map.dart');
 }
@@ -57,14 +58,17 @@ class RoutesGenerator implements Generator {
   final Map<String, dynamic> _routes;
   final String _group;
   final _ignores;
+  final _matcher;
 
-  const RoutesGenerator({
-    Map<String, dynamic> routes,
-    String group,
-    dynamic ignores,
-  })  : _routes = routes ?? const {},
+  const RoutesGenerator(
+      {Map<String, dynamic> routes,
+      String group,
+      dynamic ignores,
+      bool matcher})
+      : _routes = routes ?? const {},
         _group = group,
-        _ignores = ignores;
+        _ignores = ignores,
+        _matcher = matcher ?? false;
 
   FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
     try {
@@ -75,9 +79,13 @@ class RoutesGenerator implements Generator {
     }
   }
 
-  StringBuffer _initRoutesBuffer(String name) {
+  StringBuffer _initBuffer(String name, bool parameterized) {
     final buf = StringBuffer();
-    buf.writeln("Map<String, WidgetBuilder> $name = {");
+    if (parameterized) {
+      buf.writeln("List<WidgetBuilder Function(String)> $name = [");
+    } else {
+      buf.writeln("Map<String, WidgetBuilder> $name = {");
+    }
     return buf;
   }
 
@@ -93,6 +101,7 @@ class RoutesGenerator implements Generator {
       if (isMatched(inputId, key)) {
         Map<String, dynamic> opts = Map<String, dynamic>.from(_routes[key]);
         final group = parseGroup(opts['group'] ?? _group);
+        final matcher = opts['matcher'] ?? _matcher;
         buffer.writeln("import 'package:flutter/widgets.dart';");
         final groupBuffers = <String, StringBuffer>{};
         String defGroup = opts['name'] ?? 'routes';
@@ -112,30 +121,79 @@ class RoutesGenerator implements Generator {
             ignoreIds[id.path] = true;
           });
         }
-        print('assetIds====$assetIds');
         log.fine('ignores => $ignoreIds');
+        // var hasParameterized = false;
         for (final assetId in assetIds) {
           final lib = await buildStep.resolver.libraryFor(assetId);
           if (ignoreIds.containsKey(assetId.path)) continue;
+          var url = assetId.changeExtension('').path;
+          url = '/${p.relative(url, from: pages)}';
+          var parameterized = false;
+          final params = <String, String>{};
+          url = url.replaceAllMapped(RegExp(r'/_(\w+)'), (match) {
+            parameterized = true;
+            // hasParameterized = true;
+            params[match[1]] = match[1];
+            return '/(?<${match[1]}>[^\\/]+)';
+          });
           // 查找文件中的属于页面的类名
           final page = findPageElement(lib, group);
-          final builder = genPageBuilder(page);
+          final builder = genPageBuilder(page, parameterized, params);
           if (builder != null) {
-            final groupName = findPageGroupName(page, group) ?? defGroup;
+            var groupName = findPageGroupName(page, group) ?? defGroup;
             if (groupName.isEmpty) continue;
+            buffer.writeln("import '${p.relative(assetId.path, from: base)}';");
+            final matchName = groupName + (opts['dynamic'] ?? 'Dynamic');
+            if (parameterized) {
+              groupName = matchName;
+            } else if (matcher && !groupBuffers.containsKey(matchName)) {
+              groupBuffers[matchName] = _initBuffer(matchName, true);
+            }
             if (!groupBuffers.containsKey(groupName)) {
-              groupBuffers[groupName] = _initRoutesBuffer(groupName);
+              groupBuffers[groupName] = _initBuffer(groupName, parameterized);
             }
             final buf = groupBuffers[groupName];
-            buffer.writeln("import '${p.relative(assetId.path, from: base)}';");
-            buf.writeln(
-                "  '/${p.relative(assetId.changeExtension('').path, from: pages)}': $builder,");
+            if (parameterized) {
+              // buf.writeln("BuilderMatcher(RegExp(r'^${url}\$'), $builder,),");
+              buf.writeln('''
+              (path) {
+                final reg = RegExp(r'^$url\$');
+                final match = reg.firstMatch(path);
+                if (match == null) return null;
+                return $builder;
+              },''');
+            } else {
+              buf.writeln("  '${url}': $builder,");
+            }
           }
         }
+        // if (hasParameterized || matcher) {
+        //   buffer.writeln(
+        //       'typedef MatchWidgetBuilder = Widget Function(BuildContext, RegExpMatch);');
+        //   buffer.writeln('''
+        //   class BuilderMatcher {
+        //     final RegExp regExp;
+        //     final MatchWidgetBuilder builder;
+        //     BuilderMatcher(this.regExp, this.builder);
+        //     RegExpMatch match(String path) {
+        //       return regExp.firstMatch(path);
+        //     }
+        //     WidgetBuilder matchBuilder(String path) {
+        //       RegExpMatch match = regExp.firstMatch(path);
+        //       if (match == null) return null;
+        //       return (context) => builder(context, match);
+        //     }
+        //   }''');
+        // }
         for (final buf in groupBuffers.values) {
-          buf.writeln("};");
+          final bs = buf.toString();
           buffer.writeln();
-          buffer.writeln(buf.toString());
+          buffer.writeln(bs);
+          if (bs.startsWith('List')) {
+            buffer.writeln('];');
+          } else {
+            buffer.writeln('};');
+          }
         }
         break;
       }
@@ -197,12 +255,12 @@ ClassElement findPageElement(LibraryElement lib, List group) {
       names.add(element);
     }
   }
-  // 优先使用第一个符合规则的组件
+  // 优先使用第一个符��规则的组件
   if (names.length == 0) return null;
   return names[0];
 }
 
-String genPageBuilder(ClassElement element) {
+String genPageBuilder(ClassElement element, bool parameterized, Map params) {
   if (element == null) return null;
   if (element.constructors.length == 0) return null;
   final constructors = [];
@@ -213,16 +271,27 @@ String genPageBuilder(ClassElement element) {
   }
   constructors.add(element.constructors[0]);
   ConstructorElement constructor = constructors[0];
+  // final builderArgs = parameterized ? 'context, match' : 'context';
+  final builderArgs = 'context';
   if (constructor.parameters.length == 0) {
-    return '(context) => ${element.name}()';
+    return '($builderArgs) => ${element.name}()';
   }
+  var hasArgs = false;
   final args = constructor.parameters.map((ParameterElement e) {
+    if (params.containsKey(e.name)) {
+      if (e.isNamed) return '${e.name}: match.namedGroup(\'${e.name}\')';
+      return 'match.namedGroup(\'${e.name}\')';
+    }
+    hasArgs = true;
     if (e.isNamed) return '${e.name}: args[\'${e.name}\']';
     return 'args[\'${e.name}\']';
-  });
-  return '''(context){
+  }).join(',');
+  if (!hasArgs) {
+    return '''($builderArgs) => ${element.name}(${args})''';
+  }
+  return '''($builderArgs){
     final Map args = ModalRoute.of(context).settings?.arguments ?? {};
-    return ${element.name}(${args.join(',')});
+    return ${element.name}(${args});
   }''';
 }
 

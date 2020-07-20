@@ -80,6 +80,66 @@ class MySetting extends StatelessWidget {
   annotation classes is that routing needs to be used and managed, and random group
   names are not allowed when grouping is specified on the page.
 
+### Parameterized
+
+  If the page widget is parameterized, the generator will automatically inject parameters.
+```dart
+class ParameterizedPage extends StatelessWidget {
+  final String arg1;
+  final String arg2;
+  ParameterizedPage(this.arg1, {this.arg2});
+}
+```
+  The generated routes looks like this
+```dart
+Map<String, WidgetBuilder> routes = {
+  '/parameterized': (context) {
+    final Map args = ModalRoute.of(context).settings?.arguments ?? {};
+    return ParameterizedPage(args['arg1'], arg2: args['arg2']);
+  },
+};
+```
+
+### Dynamic Routes
+
+  If the path of the page contains a directory or file name starting with an underscore (`_`),
+  then the directory or file name will be used as a variable. 
+  such as `/dynamic/_name/_id.dart`, there are two variable in the path, `name` and `id`.
+```dart
+class DynamicPage extends StatelessWidget {
+  final String name;
+  final String id;
+  DynamicPage(this.name, {this.id});
+}
+```
+  The generated routing table is an list, which variable name ends with `Dynamic`
+```dart
+List<WidgetBuilder Function(String)> routesDynamic = [
+  (path) {
+    final reg = RegExp(r'^/dynamic/(?<name>[^\/]+)$/(?<id>[^\/]+)$');
+    final match = reg.firstMatch(path);
+    if (match == null) return null;
+    return (context) => DynamicPage(match.namedGroup('name'), id: match.namedGroup('id'));
+  },
+];
+```
+  That should be used in `onGenerateRoute`
+```dart
+onGenerateRoute: (RouteSettings settings) {
+  WidgetBuilder builder = routes[settings.name];
+  if (builder == null) {
+    for (final matcher in routesDynamic) {
+      builder = matcher(settings.name);
+      if (builder != null) {
+        break;
+      }
+    }
+  }
+  if (builder == null) return null;
+  return MaterialPageRoute(settings: settings, builder: builder);
+}
+```
+
 ## Configuration
 
   If your project structure does not conform to the convention,
@@ -159,13 +219,13 @@ targets:
 ```
   The annotation is defined as follows.
 ```dart
-class MyPageRoutes{
+class MyPageRoutes {
   final String group;
   const MyPageRoutes(this.group);
 }
 
 @MyPageRoutes(group: 'authRoutes')
-class FirstPage extends StatelessWidget{
+class FirstPage extends StatelessWidget {
 }
 ```
 

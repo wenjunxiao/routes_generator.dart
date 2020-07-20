@@ -75,6 +75,65 @@ class MySetting extends StatelessWidget {
 ```
   约定注解是私有类实例，而不提供注解类的原因是路由需要被使用和管理，在页面规定分组时不允许随意的分组名。
 
+### 参数化
+
+  如果路由的参数化页面，生成器会自动注入对应的参数
+```dart
+class ParameterizedPage extends StatelessWidget {
+  final String arg1;
+  final String arg2;
+  ParameterizedPage(this.arg1, {this.arg2});
+}
+```
+  生成的路由表如下
+```dart
+Map<String, WidgetBuilder> routes = {
+  '/parameterized': (context) {
+    final Map args = ModalRoute.of(context).settings?.arguments ?? {};
+    return ParameterizedPage(args['arg1'], arg2: args['arg2']);
+  },
+};
+```
+
+### 动态路由
+
+  如果页面的路径中包含以下划线`_`开头的目录或者文件，那么对应的目录或文件名将会作为变量。
+  比如`/dynamic/_name/_id.dart`路径中有两个变量`name`和`id`
+```dart
+class DynamicPage extends StatelessWidget {
+  final String name;
+  final String id;
+  DynamicPage(this.name, {this.id});
+}
+```
+  生成的路由表是一个数组, 其变量名以`Dynamic`结尾
+```dart
+List<WidgetBuilder Function(String)> routesDynamic = [
+  (path) {
+    final reg = RegExp(r'^/dynamic/(?<name>[^\/]+)$/(?<id>[^\/]+)$');
+    final match = reg.firstMatch(path);
+    if (match == null) return null;
+    return (context) => DynamicPage(match.namedGroup('name'), id: match.namedGroup('id'));
+  },
+];
+```
+  这应该在`onGenerateRoute`中使用，如下所示
+```dart
+onGenerateRoute: (RouteSettings settings) {
+  WidgetBuilder builder = routes[settings.name];
+  if (builder == null) {
+    for (final matcher in routesDynamic) {
+      builder = matcher(settings.name);
+      if (builder != null) {
+        break;
+      }
+    }
+  }
+  if (builder == null) return null;
+  return MaterialPageRoute(settings: settings, builder: builder);
+}
+```
+
 ## 配置
 
   如果项目结构不满足约定的要求，或者需要根据环境或者其他因素拆分页面到不同的目录，
