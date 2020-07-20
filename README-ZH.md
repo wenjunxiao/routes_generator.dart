@@ -113,11 +113,11 @@ targets:
     builders:
       routes_generator:
         options:
-          ext: ".map.dart" # generated file extension
+          ext: ".map.dart" # 定义生成文件的后缀名
           routes:
-            routes.dart: # routes.dart 
-              name: "routes" # generated variable name
-              pages: "pages" # pages directory, relative to `routes.dart`
+            routes.dart: # routes.dart
+              name: "routes" # 生成路由的变量名
+              pages: "pages" # 路由页面所在目录，相对于`routes.dart`文件
 ```
   可以添加或修改以满足对应的场景。比如，路由的目录是`views`而不是`pages`
 ```yaml
@@ -126,14 +126,14 @@ targets:
     builders:
       routes_generator:
         options:
-          ext: ".my.dart" # change generated file extension
+          ext: ".my.dart" # 修改后缀名
           routes:
-            my_routes.dart: # change routes file
-              name: "myRoutes" # change the variable name 
-              pages: "../view" # change pages location
-            dev/my_routes.dart:
-              name: "devRoutes"
-              pages: "views"
+            my_routes.dart: # 修改路由标识的文件名
+              name: "myRoutes" # 修改生成的变量名
+              pages: "../view" # 修改路由页面的名称和相对位置
+            dev/my_routes.dart: # 增加一个dev的路由配置
+              name: "devRoutes" # dev路由表的变量名
+              pages: "views" # 相对于`dev`目录中`my_routes.dart`的路由页面目录
 ```
 
 ### 分组配置
@@ -146,7 +146,7 @@ targets:
     builders:
       routes_generator:
         options:
-          group: "_RoutesGroup.name" # change with class name and it's field name
+          group: "MyPageRoutes.group" # 修改分组注解的类名和属性名
 ```
   注解的定义如下
 ```dart
@@ -169,7 +169,7 @@ targets:
     builders:
       routes_generator:
         options:
-          ignores: "**/widgets/**" # ignore all `widgets` directory in `pages`
+          ignores: "**/widgets/**" # 忽略所有`widgets`目录
 ```
   或者配置多条
 ```yaml
@@ -179,6 +179,6 @@ targets:
       routes_generator:
         options:
           ignores:
-            - "**/widgets/**" # ignore all `widgets` directory in `pages`
-            - "**.g.dart" # ignore all generated files
+            - "**/widgets/**" # 忽略所有`widgets`目录
+            - "**.g.dart" # 忽略所有生成的文件
 ```
