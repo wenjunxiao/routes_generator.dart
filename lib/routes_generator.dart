@@ -6,6 +6,7 @@ import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_gen/source_gen.dart';
 
+/// Routes Generator Builder Factory
 Builder routesBuilder([BuilderOptions options]) {
   /**
    * 根据约定的规则生成路由，配置文件的key是路由文件所在的目录，比如默认的`routes.dart`
@@ -20,13 +21,15 @@ Builder routesBuilder([BuilderOptions options]) {
       RoutesGenerator(
         routes: routes,
         group: config['group'],
-        ignores: ensureList(config['ignores']),
+        ignores: _ensureList(config['ignores']),
         matcher: config['matcher'],
+        ext: config['ext'] ?? '.map.dart',
       ),
       generatedExtension: config['ext'] ?? '.map.dart');
 }
 
-List ensureList(value) {
+/// 确保值是List类型
+List _ensureList(value) {
   if (value is List) return value;
   if (value == null) return [];
   return [value];
@@ -35,7 +38,7 @@ List ensureList(value) {
 /// 判断`key`是否是`inputId`的叶子路径，每级目录必须完全匹配
 /// 比如 `bb/cc` 能够匹配 `/aa/bb/cc`
 /// 但是 `b/cc` 不能匹配 `/aa/bb/cc`
-bool isMatched(String inputId, String key) {
+bool _isMatched(String inputId, String key) {
   if (!inputId.endsWith(key)) return false;
   // 完全匹配
   if (inputId.length == key.length) return true;
@@ -44,7 +47,8 @@ bool isMatched(String inputId, String key) {
   return c == '/' || c == '\\' || c == '|' || c == ':';
 }
 
-List parseGroup(String group) {
+/// 解析分组设置，['分组注解类名', '分组信息所在属性名']
+List _parseGroup(String group) {
   if (group == null) return [''];
   if (group.isEmpty) return [''];
   final gs = group.split('.');
@@ -54,22 +58,34 @@ List parseGroup(String group) {
   return gs;
 }
 
+/// Routes Generator
 class RoutesGenerator implements Generator {
   final Map<String, dynamic> _routes;
   final String _group;
   final _ignores;
   final _matcher;
+  final List<String> keys;
+  final String _ext;
 
-  const RoutesGenerator(
+  RoutesGenerator(
       {Map<String, dynamic> routes,
       String group,
       dynamic ignores,
+      String ext,
       bool matcher})
       : _routes = routes ?? const {},
-        _group = group,
+        _group = group ?? '_RoutesGroup.name',
         _ignores = ignores,
-        _matcher = matcher ?? false;
+        _matcher = matcher ?? false,
+        _ext = ext,
+        keys = routes?.keys?.toList() ?? [] {
+    /**
+     * 按照key的长度进行降序排序，以便优先匹配长的，越长匹配度越高
+     */
+    keys.sort((a, b) => b.length - a.length);
+  }
 
+  @override
   FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
     try {
       return await _generate(library, buildStep);
@@ -79,12 +95,13 @@ class RoutesGenerator implements Generator {
     }
   }
 
+  /// 初始化buffer
   StringBuffer _initBuffer(String name, bool parameterized) {
     final buf = StringBuffer();
     if (parameterized) {
-      buf.writeln("List<WidgetBuilder Function(String)> $name = [");
+      buf.writeln('List<WidgetBuilder Function(String)> $name = [');
     } else {
-      buf.writeln("Map<String, WidgetBuilder> $name = {");
+      buf.writeln('Map<String, WidgetBuilder> $name = {');
     }
     return buf;
   }
@@ -92,29 +109,45 @@ class RoutesGenerator implements Generator {
   FutureOr<String> _generate(LibraryReader library, BuildStep buildStep) async {
     final buffer = StringBuffer();
     final inputId = buildStep.inputId.toString();
-    final keys = _routes.keys.toList();
-    /**
-     * 按照key的长度进行降序排序，以便优先匹配长的，越长匹配度越高
-     */
-    keys.sort((a, b) => b.length - a.length);
     for (final key in keys) {
-      if (isMatched(inputId, key)) {
+      if (_isMatched(inputId, key)) {
+        final outputId = buildStep.inputId.changeExtension(_ext).uri.toString();
+        final outputName = p.basename(outputId);
+        final curName = p.join('.', outputName);
+        final outputMatched = (uri) {
+          return uri == outputName || uri == outputId || uri == curName;
+        };
+        // 只有在 routes.dart 中 导入或者导出 routes.map.dart 才是符合生成要求
+        if (!(library.element.imports.any((e) => outputMatched(e.uri)) ||
+            library.element.exports.any((e) => outputMatched(e.uri)))) {
+          continue;
+        }
         Map<String, dynamic> opts = Map<String, dynamic>.from(_routes[key]);
-        final group = parseGroup(opts['group'] ?? _group);
+        final dynamicName = (opts['dynamic'] ?? 'Dynamic');
+        final group = _parseGroup(opts['group'] ?? _group);
         final matcher = opts['matcher'] ?? _matcher;
         buffer.writeln("import 'package:flutter/widgets.dart';");
         final groupBuffers = <String, StringBuffer>{};
         String defGroup = opts['name'] ?? 'routes';
+        groupBuffers[defGroup] = _initBuffer(defGroup, false);
+        groupBuffers[defGroup + dynamicName] =
+            _initBuffer(defGroup + dynamicName, true);
+        for (final name in _findRoutesGroups(library, group)) {
+          groupBuffers[name] = _initBuffer(name, false);
+          groupBuffers[name + dynamicName] =
+              _initBuffer(name + dynamicName, true);
+        }
         // 获取路由文件的目录，用于计算pages目录
         final base = p.normalize(p.dirname(buildStep.inputId.path));
         final pages = p.normalize(p.join(base, opts['pages'] ?? 'pages'));
-        final ignores = ensureList(opts['ignores'] ?? _ignores);
+        final ignores = _ensureList(opts['ignores'] ?? _ignores);
         final pattern = p.join(pages, '**.dart');
         log.fine('match rule [$key], pattern=$pattern');
         // 查找pages目录及其子目录所有dart文件
         final assetIds = await buildStep.findAssets(Glob(pattern)).toList()
           ..sort();
         final ignoreIds = <String, bool>{};
+        final groupMap = <String, Map<String, String>>{};
         for (final ignore in ignores) {
           final pattern = p.join(base, ignore);
           await buildStep.findAssets(Glob(pattern)).forEach((id) {
@@ -122,28 +155,28 @@ class RoutesGenerator implements Generator {
           });
         }
         log.fine('ignores => $ignoreIds');
-        // var hasParameterized = false;
+        final paramReg = RegExp(r'/_(\w+)');
         for (final assetId in assetIds) {
           final lib = await buildStep.resolver.libraryFor(assetId);
           if (ignoreIds.containsKey(assetId.path)) continue;
           var url = assetId.changeExtension('').path;
-          url = '/${p.relative(url, from: pages)}';
+          final origUrl = '/${p.relative(url, from: pages)}';
           var parameterized = false;
           final params = <String, String>{};
-          url = url.replaceAllMapped(RegExp(r'/_(\w+)'), (match) {
+          url = origUrl.replaceAllMapped(paramReg, (match) {
             parameterized = true;
             // hasParameterized = true;
             params[match[1]] = match[1];
             return '/(?<${match[1]}>[^\\/]+)';
           });
           // 查找文件中的属于页面的类名
-          final page = findPageElement(lib, group);
-          final builder = genPageBuilder(page, parameterized, params);
+          final page = _findPageElement(lib, group);
+          final builder = _genPageBuilder(page, parameterized, params);
           if (builder != null) {
-            var groupName = findPageGroupName(page, group) ?? defGroup;
+            var groupName = _findPageGroupName(page, group) ?? defGroup;
             if (groupName.isEmpty) continue;
             buffer.writeln("import '${p.relative(assetId.path, from: base)}';");
-            final matchName = groupName + (opts['dynamic'] ?? 'Dynamic');
+            final matchName = groupName + dynamicName;
             if (parameterized) {
               groupName = matchName;
             } else if (matcher && !groupBuffers.containsKey(matchName)) {
@@ -154,39 +187,37 @@ class RoutesGenerator implements Generator {
             }
             final buf = groupBuffers[groupName];
             if (parameterized) {
-              // buf.writeln("BuilderMatcher(RegExp(r'^${url}\$'), $builder,),");
-              buf.writeln('''
+              /// 正则表达式匹配列表需要排序，同一个位置是正则的需要排在后面
+              /// 保证正则和非正则可以同时存在，并且非正则优先匹配
+              /// 以下把正则位置替换成最小的字符'\0'，方便进行排序
+              final key = origUrl.replaceAllMapped(paramReg, (match) {
+                return '/\0';
+              });
+              groupMap[groupName] = groupMap[groupName] ?? <String, String>{};
+              groupMap[groupName][key] = '''
               (path) {
                 final reg = RegExp(r'^$url\$');
                 final match = reg.firstMatch(path);
                 if (match == null) return null;
                 return $builder;
-              },''');
+              },''';
             } else {
               buf.writeln("  '${url}': $builder,");
             }
           }
         }
-        // if (hasParameterized || matcher) {
-        //   buffer.writeln(
-        //       'typedef MatchWidgetBuilder = Widget Function(BuildContext, RegExpMatch);');
-        //   buffer.writeln('''
-        //   class BuilderMatcher {
-        //     final RegExp regExp;
-        //     final MatchWidgetBuilder builder;
-        //     BuilderMatcher(this.regExp, this.builder);
-        //     RegExpMatch match(String path) {
-        //       return regExp.firstMatch(path);
-        //     }
-        //     WidgetBuilder matchBuilder(String path) {
-        //       RegExpMatch match = regExp.firstMatch(path);
-        //       if (match == null) return null;
-        //       return (context) => builder(context, match);
-        //     }
-        //   }''');
-        // }
-        for (final buf in groupBuffers.values) {
-          final bs = buf.toString();
+        for (final entry in groupBuffers.entries) {
+          Map<String, String> map = groupMap[entry.key];
+          if (map != null) {
+            List<String> urls = map.keys.toList();
+            urls.sort((a, b) {
+              return b.compareTo(a);
+            });
+            for (final url in urls) {
+              entry.value.writeln(map[url]);
+            }
+          }
+          final bs = entry.value.toString();
           buffer.writeln();
           buffer.writeln(bs);
           if (bs.startsWith('List')) {
@@ -202,7 +233,8 @@ class RoutesGenerator implements Generator {
   }
 }
 
-bool isWidget(ClassElement element) {
+/// 判断是否是 Widget组件
+bool _isWidget(ClassElement element) {
   if (element.allSupertypes.length == 0) return false;
   for (final type in element.allSupertypes) {
     if (type.getDisplayString() == 'Widget') {
@@ -213,7 +245,7 @@ bool isWidget(ClassElement element) {
 }
 
 /// 根据注解检测是否强制指定为路由组件
-bool isRoutesWidget(Element element, List group) {
+bool _isRoutesWidget(Element element, List group) {
   if (element.metadata.length == 0) return false;
   for (final ea in element.metadata) {
     final name = ea.element.name;
@@ -221,7 +253,7 @@ bool isRoutesWidget(Element element, List group) {
     if (name == 'protected' || name == 'deprecated') return null;
     final annotation = ConstantReader(ea.computeConstantValue());
     // 如果使用注解`@pragma('build:routes')`指定了某个组件，直接返回该组件
-    if (isBuildRoutes(annotation)) {
+    if (_isBuildRoutes(annotation)) {
       return true;
     } else if (ea.element is ConstructorElement) {
       ConstructorElement element = ea.element as ConstructorElement;
@@ -238,7 +270,8 @@ bool isRoutesWidget(Element element, List group) {
   return false;
 }
 
-ClassElement findPageElement(LibraryElement lib, List group) {
+/// 查找页面Element
+ClassElement _findPageElement(LibraryElement lib, List group) {
   if (lib.topLevelElements.length == 0) return null;
   List<ClassElement> names = [];
   for (var element in lib.topLevelElements) {
@@ -246,8 +279,8 @@ ClassElement findPageElement(LibraryElement lib, List group) {
     if (element.isPublic &&
         !element.hasDeprecated &&
         element is ClassElement &&
-        isWidget(element)) {
-      bool isRouter = isRoutesWidget(element, group);
+        _isWidget(element)) {
+      bool isRouter = _isRoutesWidget(element, group);
       if (isRouter == null) continue;
       if (isRouter) {
         return element;
@@ -255,12 +288,13 @@ ClassElement findPageElement(LibraryElement lib, List group) {
       names.add(element);
     }
   }
-  // 优先使用第一个符��规则的组件
+  // 优先使用第一个符合规则的组件
   if (names.length == 0) return null;
   return names[0];
 }
 
-String genPageBuilder(ClassElement element, bool parameterized, Map params) {
+/// 生成页面的构造方法
+String _genPageBuilder(ClassElement element, bool parameterized, Map params) {
   if (element == null) return null;
   if (element.constructors.length == 0) return null;
   final constructors = [];
@@ -271,7 +305,6 @@ String genPageBuilder(ClassElement element, bool parameterized, Map params) {
   }
   constructors.add(element.constructors[0]);
   ConstructorElement constructor = constructors[0];
-  // final builderArgs = parameterized ? 'context, match' : 'context';
   final builderArgs = 'context';
   if (constructor.parameters.length == 0) {
     return '($builderArgs) => ${element.name}()';
@@ -295,14 +328,16 @@ String genPageBuilder(ClassElement element, bool parameterized, Map params) {
   }''';
 }
 
-isBuildRoutes(ConstantReader annotation) {
+/// 判断是否是 @pragma('build:routes') 注解，用于测试
+bool _isBuildRoutes(ConstantReader annotation) {
   final cr = annotation.peek('name');
   if (cr == null) return false;
   if (cr.isString && cr.stringValue == 'build:routes') return true;
   return false;
 }
 
-String findPageGroupName(ClassElement element, List group) {
+/// 检测页面是否指定了路由分组
+String _findPageGroupName(ClassElement element, List group) {
   if (element.metadata.length > 0) {
     for (final ea in element.metadata) {
       if (ea.element is ConstructorElement) {
@@ -311,15 +346,17 @@ String findPageGroupName(ClassElement element, List group) {
         final cr = ConstantReader(ea.computeConstantValue());
         // 如果使用注解`@pragma('build:routes', ['login'])`指定了某个分组
         final opts = cr.peek('options');
-        if (isBuildRoutes(cr) && opts != null && opts.isList) {
+        if (_isBuildRoutes(cr) && opts != null && opts.isList) {
           if (opts.listValue.length > 0) {
             return opts.listValue[0].toStringValue();
           }
         }
+        // 使用了注解类 @RoutesGroup('group')
         if (name != null && name.isNotEmpty && name == group[0]) {
           return cr.peek(group[1])?.stringValue;
         }
       } else if (ea.element is PropertyAccessorElement) {
+        // 使用了注解实例 @groupedRoutes
         PropertyAccessorElement element = ea.element;
         final name = element.variable.type?.element?.name;
         if (name == group[0]) {
@@ -330,4 +367,50 @@ String findPageGroupName(ClassElement element, List group) {
     }
   }
   return null;
+}
+
+/// 查找所有支持的路由分组
+Iterable<String> _findRoutesGroups(LibraryReader library, List group) sync* {
+  // 默认只生成出现过的分组，为了避免初始时没有导致处理时报错，检测所有导入或者导出的分组
+  final groupClass = library.element.getType(group[0]); // 当前文件是否就是定义分组的地方
+  if (groupClass != null) {
+    final groupType = groupClass.runtimeType;
+    for (final element in library.element.topLevelElements) {
+      if ((element is VariableElement) &&
+          element.type?.element?.runtimeType == groupType) {
+        final cr = ConstantReader(element.computeConstantValue());
+        final gn = cr.peek(group[1])?.stringValue;
+        if (gn != null && gn.isNotEmpty) {
+          yield gn;
+        }
+      }
+    }
+  } else {
+    // 在 routes.dart 使用 exports 'path/of/routes_group.dart' show authRequired;
+    for (final element in library.element.exports) {
+      // 当前文件是否就是定义分组的地方
+      final groupClass = element.exportedLibrary?.getType(group[0]);
+      if (groupClass != null && element.combinators.length > 0) {
+        final groupType = groupClass.thisType;
+        for (final combinator in element.combinators) {
+          if (combinator is ShowElementCombinator) {
+            for (final element in element.exportedLibrary.topLevelElements) {
+              if (element is VariableElement &&
+                  element.type.element is ClassElement) {
+                final typeEl = element.type.element as ClassElement;
+                if (typeEl.thisType == groupType &&
+                    combinator.shownNames.contains(element.name)) {
+                  final cr = ConstantReader(element.computeConstantValue());
+                  final gn = cr.peek(group[1])?.stringValue;
+                  if (gn != null && gn.isNotEmpty) {
+                    yield gn;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

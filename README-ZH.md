@@ -9,7 +9,7 @@
 
 ## 约定
 
-* `routes.dart`文件中导出路由及其相关功能给`MaterialApp`使用。
+* `routes.dart`文件中导出路由及其相关功能给`MaterialApp`使用，并且`routes.dart`文件中必须导入`routes.map.dart` 
 * `pages`目录(相对于`routes.dart`)包含所有路由页面，每个文件只包含一个路由页面，
   生成器会读取该目录中所有的`.dart`文件，并在`routes.map.dart`文件中生成对应的路由表
 * 以上两条规则适用于项目中的任意子目录
@@ -23,19 +23,19 @@
 dev_dependencies:
   routes_generator: any
 ```
-
-  执行代码生成命令
-```bash
-$ flutter pub run build_runner build
-```
-
-  可以通过`routes.dart`导入或者直接导入`routes.map.dart`
+  
+  在`routes.dart`文件（如果不存在则新增）导入`routes.map.dart`，无需新增`routes.map.dart`文件，会自动生成。
 ```dart
 // routes.dart
 import 'package:flutter/widgets.dart';
 import 'routes.map.dart' as p;
 
 Map<String, WidgetBuilder> routes = p.routes;
+```
+
+  执行代码生成命令
+```bash
+$ flutter pub run build_runner build
 ```
 
   如果有多个`routes.map.dart`，那么在使用之前需要进行对应的合并

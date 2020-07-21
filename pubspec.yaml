@@ -1,6 +1,8 @@
 name: routes_generator
-description: Automatically builder routes for pages.
-version: 0.0.2
+description: >-
+  Automatically generate routes of pages for `MaterialApp` of `flutter`.
+  Supports group routes, parameterized pages, dynamic routes.
+version: 0.0.3
 homepage: https://github.com/wenjunxiao/routes_generator.dart
 
 environment:

@@ -8,8 +8,9 @@ Non-intrusive, convention over configuration, only need to install and build.
 
 ## Convention
 
-* The `routes.dart` file used to export routes and related functions to `MaterialApp`.
-* The `pages` directory relatived to `routes.dart` contains your app views and routes,
+* The `routes.dart` file used to export routes and related functions to `MaterialApp`,
+  and `routes.map.dart` must be imported in the file `routes.dart`. 
+* The `pages` directory relative to `routes.dart` contains your app views and routes,
   each file contains only one routing page, generator reads all `.dart` files inside
   this directory and generate routes map into `routes.map.dart`.
 * The above two conventions apply to any directory of the project.
@@ -23,19 +24,20 @@ Non-intrusive, convention over configuration, only need to install and build.
 dev_dependencies:
   routes_generator: any
 ```
-
-  Run code generation.
-```bash
-$ flutter pub run build_runner build
-```
-
-  Import through `routes.dart` or direct import `routes.map.dart`.
+  
+  Import `routes.map.dart` in the `routes.dart` file (add new if it does not exist),
+  you do not need to add a new `routes.map.dart` file, it will be automatically generated.
 ```dart
 // routes.dart
 import 'package:flutter/widgets.dart';
 import 'routes.map.dart' as p;
 
 Map<String, WidgetBuilder> routes = p.routes;
+```
+
+  Run code generation.
+```bash
+$ flutter pub run build_runner build
 ```
 
   If there are multiple `routes.map.dart`, they need to be merged and used.

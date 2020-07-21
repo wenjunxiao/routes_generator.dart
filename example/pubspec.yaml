@@ -1,0 +1,19 @@
+name: routes_example
+description: An example project for routes generator
+publish_to: 'none'
+version: 1.0.0+1
+
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: any
+  routes_generator:
+    path: ../
+
+flutter:
+  uses-material-design: true
