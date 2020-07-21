@@ -1,3 +1,7 @@
+# 0.0.4
+- Optimize configuration options
+- Add analysis options
+
 # 0.0.3
 - Fix dynamic routes sort
 - Fix group routes missing when there is no pages

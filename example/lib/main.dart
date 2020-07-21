@@ -6,9 +6,9 @@ import 'dev/routes.dart' as d;
 
 void main() {
   runApp(MyApp(
-    routes: {...routes, ...d.routes},
+    routes: {...routes, ...d.devRoutes},
     authRoutes: {...authRoutes, ...d.authRoutes},
-    routesDynamic: [...routesDynamic, ...d.routesDynamic],
-    authRoutesDynamic: [...authRoutesDynamic, ...d.authRoutesDynamic],
+    routesDynamic: [...routesDynamic],
+    authRoutesDynamic: [...authRoutesDynamic],
   ));
 }

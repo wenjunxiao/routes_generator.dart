@@ -231,6 +231,20 @@ class FirstPage extends StatelessWidget {
 }
 ```
 
+  This option can also be in any `routes` sub-node,
+  which will override the default option.
+```yaml
+targets:
+  $default:
+    builders:
+      routes_generator:
+        options:
+          group: "MyPageRoutes.group"
+          routes:
+            routes.dart:
+              group: "SubPageRoutes.group"
+```
+
 ### Ignores
 
   If there are non-routing page files or directories in the `pages` directory,
@@ -254,4 +268,38 @@ targets:
           ignores:
             - "**/widgets/**" # ignore all `widgets` directory in `pages`
             - "**.g.dart" # ignore all generated files
+```
+  This option can also be in any `routes` sub-node,
+  which will override the default option.
+  You can also set `false` to disable this option.
+```yaml
+targets:
+  $default:
+    builders:
+      routes_generator:
+        options:
+          ignores: "**.g.dart"
+          routes:
+            routes.dart:
+              ignores: "**/widgets/**"
+            dev/routes.dart:
+              ignores: false # disable ignore any files
+```
+
+### Dynamic
+
+  The suffix name of dynamic routing variable can be configured.
+  You can also set `false` to prohibit the generation of dynamic routing.
+```yaml
+targets:
+  $default:
+    builders:
+      routes_generator:
+        options:
+          dynamic: 'Dynamic'
+          routes:
+            routes.dart:
+              dynamic: 'Dynamic'
+            dev/routes.dart:
+              dynamic: false # disable dynamic routes
 ```

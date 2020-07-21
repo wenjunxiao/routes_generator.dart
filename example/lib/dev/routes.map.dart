@@ -5,11 +5,14 @@
 // **************************************************************************
 
 import 'package:flutter/widgets.dart';
+import 'pages/_not_dynamic.dart';
+import 'pages/hosts.dart';
+import 'pages/widgets/widgets.g.dart';
 
-Map<String, WidgetBuilder> routes = {};
-
-List<WidgetBuilder Function(String)> routesDynamic = [];
+Map<String, WidgetBuilder> devRoutes = {
+  '/_not_dynamic': (context) => NotDynamicPage(),
+  '/hosts': (context) => HostsPage(),
+  '/widgets/widgets.g': (context) => WidgetsPage(),
+};
 
 Map<String, WidgetBuilder> authRoutes = {};
-
-List<WidgetBuilder Function(String)> authRoutesDynamic = [];

@@ -12,19 +12,10 @@ targets:
               name: "routes"
               pages: "pages"
               group: '_RoutesGroup.name'
-              ignores: '**/ignores/**'
-              dynamic: 'Dynamic'
+              ignores: '**/widgets/**'
             dev/routes.dart:
               name: "devRoutes"
               pages: "pages"
               group: '_RoutesGroup.name'
-              ignores: '**/ignores/**'
-              dynamic: 'Dynamic'
-
-builders:
-  routes_generator:
-    import: "package:routes_generator/routes_generator.dart"
-    builder_factories: ["routesBuilder"]
-    build_extensions: {".dart": [".map.dart"]}
-    build_to: source # 构建输出:cache-缓存，不生成文件;source-生成源文件
-    auto_apply: dependents
+              dynamic: false
+              ignores: false

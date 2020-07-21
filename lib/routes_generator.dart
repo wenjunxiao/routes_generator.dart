@@ -22,14 +22,21 @@ Builder routesBuilder([BuilderOptions options]) {
         routes: routes,
         group: config['group'],
         ignores: _ensureList(config['ignores']),
-        matcher: config['matcher'],
         ext: config['ext'] ?? '.map.dart',
+        dynamicSuffix: _ensureString(config['dynamic'] ?? 'Dynamic'),
       ),
       generatedExtension: config['ext'] ?? '.map.dart');
 }
 
+// 确保是字符串
+String _ensureString(value) {
+  if (value == false) return '';
+  return value as String;
+}
+
 /// 确保值是List类型
 List _ensureList(value) {
+  if (value == false) return [];
   if (value is List) return value;
   if (value == null) return [];
   return [value];
@@ -63,21 +70,22 @@ class RoutesGenerator implements Generator {
   final Map<String, dynamic> _routes;
   final String _group;
   final _ignores;
-  final _matcher;
   final List<String> keys;
   final String _ext;
+  final String _dynamicSuffix;
 
   RoutesGenerator(
       {Map<String, dynamic> routes,
       String group,
       dynamic ignores,
       String ext,
+      String dynamicSuffix,
       bool matcher})
       : _routes = routes ?? const {},
         _group = group ?? '_RoutesGroup.name',
         _ignores = ignores,
-        _matcher = matcher ?? false,
         _ext = ext,
+        _dynamicSuffix = dynamicSuffix ?? 'Dynamic',
         keys = routes?.keys?.toList() ?? [] {
     /**
      * 按照key的长度进行降序排序，以便优先匹配长的，越长匹配度越高
@@ -96,7 +104,7 @@ class RoutesGenerator implements Generator {
   }
 
   /// 初始化buffer
-  StringBuffer _initBuffer(String name, bool parameterized) {
+  StringBuffer _initBuf(String name, bool parameterized) {
     final buf = StringBuffer();
     if (parameterized) {
       buf.writeln('List<WidgetBuilder Function(String)> $name = [');
@@ -122,20 +130,23 @@ class RoutesGenerator implements Generator {
             library.element.exports.any((e) => outputMatched(e.uri)))) {
           continue;
         }
-        Map<String, dynamic> opts = Map<String, dynamic>.from(_routes[key]);
-        final dynamicName = (opts['dynamic'] ?? 'Dynamic');
+        final opts = Map<String, dynamic>.from(_routes[key]);
+        final _dynamic = _ensureString(opts['dynamic'] ?? _dynamicSuffix);
         final group = _parseGroup(opts['group'] ?? _group);
-        final matcher = opts['matcher'] ?? _matcher;
         buffer.writeln("import 'package:flutter/widgets.dart';");
-        final groupBuffers = <String, StringBuffer>{};
+        final _buffers = <String, StringBuffer>{};
         String defGroup = opts['name'] ?? 'routes';
-        groupBuffers[defGroup] = _initBuffer(defGroup, false);
-        groupBuffers[defGroup + dynamicName] =
-            _initBuffer(defGroup + dynamicName, true);
+        _buffers[defGroup] = _initBuf(defGroup, false);
+        if (_dynamic.isNotEmpty) {
+          final dynamicGroup = defGroup + _dynamic;
+          _buffers[dynamicGroup] = _initBuf(dynamicGroup, true);
+        }
         for (final name in _findRoutesGroups(library, group)) {
-          groupBuffers[name] = _initBuffer(name, false);
-          groupBuffers[name + dynamicName] =
-              _initBuffer(name + dynamicName, true);
+          _buffers[name] = _initBuf(name, false);
+          if (_dynamic.isNotEmpty) {
+            final dynamicGroup = name + _dynamic;
+            _buffers[dynamicGroup] = _initBuf(dynamicGroup, true);
+          }
         }
         // 获取路由文件的目录，用于计算pages目录
         final base = p.normalize(p.dirname(buildStep.inputId.path));
@@ -163,12 +174,16 @@ class RoutesGenerator implements Generator {
           final origUrl = '/${p.relative(url, from: pages)}';
           var parameterized = false;
           final params = <String, String>{};
-          url = origUrl.replaceAllMapped(paramReg, (match) {
-            parameterized = true;
-            // hasParameterized = true;
-            params[match[1]] = match[1];
-            return '/(?<${match[1]}>[^\\/]+)';
-          });
+          if (_dynamic.isNotEmpty) {
+            url = origUrl.replaceAllMapped(paramReg, (match) {
+              parameterized = true;
+              // hasParameterized = true;
+              params[match[1]] = match[1];
+              return '/(?<${match[1]}>[^\\/]+)';
+            });
+          } else {
+            url = origUrl;
+          }
           // 查找文件中的属于页面的类名
           final page = _findPageElement(lib, group);
           final builder = _genPageBuilder(page, parameterized, params);
@@ -176,16 +191,13 @@ class RoutesGenerator implements Generator {
             var groupName = _findPageGroupName(page, group) ?? defGroup;
             if (groupName.isEmpty) continue;
             buffer.writeln("import '${p.relative(assetId.path, from: base)}';");
-            final matchName = groupName + dynamicName;
             if (parameterized) {
-              groupName = matchName;
-            } else if (matcher && !groupBuffers.containsKey(matchName)) {
-              groupBuffers[matchName] = _initBuffer(matchName, true);
+              groupName = groupName + _dynamic;
             }
-            if (!groupBuffers.containsKey(groupName)) {
-              groupBuffers[groupName] = _initBuffer(groupName, parameterized);
+            if (!_buffers.containsKey(groupName)) {
+              _buffers[groupName] = _initBuf(groupName, parameterized);
             }
-            final buf = groupBuffers[groupName];
+            final buf = _buffers[groupName];
             if (parameterized) {
               /// 正则表达式匹配列表需要排序，同一个位置是正则的需要排在后面
               /// 保证正则和非正则可以同时存在，并且非正则优先匹配
@@ -206,10 +218,10 @@ class RoutesGenerator implements Generator {
             }
           }
         }
-        for (final entry in groupBuffers.entries) {
-          Map<String, String> map = groupMap[entry.key];
+        for (final entry in _buffers.entries) {
+          final map = groupMap[entry.key];
           if (map != null) {
-            List<String> urls = map.keys.toList();
+            final urls = map.keys.toList();
             urls.sort((a, b) {
               return b.compareTo(a);
             });
@@ -235,7 +247,7 @@ class RoutesGenerator implements Generator {
 
 /// 判断是否是 Widget组件
 bool _isWidget(ClassElement element) {
-  if (element.allSupertypes.length == 0) return false;
+  if (element.allSupertypes.isEmpty) return false;
   for (final type in element.allSupertypes) {
     if (type.getDisplayString() == 'Widget') {
       return true;
@@ -246,7 +258,7 @@ bool _isWidget(ClassElement element) {
 
 /// 根据注解检测是否强制指定为路由组件
 bool _isRoutesWidget(Element element, List group) {
-  if (element.metadata.length == 0) return false;
+  if (element.metadata.isEmpty) return false;
   for (final ea in element.metadata) {
     final name = ea.element.name;
     // 使用注解`@protected` 或 `@deprecated`
@@ -256,7 +268,7 @@ bool _isRoutesWidget(Element element, List group) {
     if (_isBuildRoutes(annotation)) {
       return true;
     } else if (ea.element is ConstructorElement) {
-      ConstructorElement element = ea.element as ConstructorElement;
+      final element = ea.element as ConstructorElement;
       final name = element.returnType.element.name;
       if (name != null && name.isNotEmpty && name == group[0]) {
         return true;
@@ -272,15 +284,15 @@ bool _isRoutesWidget(Element element, List group) {
 
 /// 查找页面Element
 ClassElement _findPageElement(LibraryElement lib, List group) {
-  if (lib.topLevelElements.length == 0) return null;
-  List<ClassElement> names = [];
+  if (lib.topLevelElements.isEmpty) return null;
+  final names = <ClassElement>[];
   for (var element in lib.topLevelElements) {
     // 查找公共的继承自Widget的组件，过滤标记为已过期的组件
     if (element.isPublic &&
         !element.hasDeprecated &&
         element is ClassElement &&
         _isWidget(element)) {
-      bool isRouter = _isRoutesWidget(element, group);
+      final isRouter = _isRoutesWidget(element, group);
       if (isRouter == null) continue;
       if (isRouter) {
         return element;
@@ -289,14 +301,14 @@ ClassElement _findPageElement(LibraryElement lib, List group) {
     }
   }
   // 优先使用第一个符合规则的组件
-  if (names.length == 0) return null;
+  if (names.isEmpty) return null;
   return names[0];
 }
 
 /// 生成页面的构造方法
 String _genPageBuilder(ClassElement element, bool parameterized, Map params) {
   if (element == null) return null;
-  if (element.constructors.length == 0) return null;
+  if (element.constructors.isEmpty) return null;
   final constructors = [];
   for (var constructor in element.constructors) {
     if (constructor.isDefaultConstructor) {
@@ -306,7 +318,7 @@ String _genPageBuilder(ClassElement element, bool parameterized, Map params) {
   constructors.add(element.constructors[0]);
   ConstructorElement constructor = constructors[0];
   final builderArgs = 'context';
-  if (constructor.parameters.length == 0) {
+  if (constructor.parameters.isEmpty) {
     return '($builderArgs) => ${element.name}()';
   }
   var hasArgs = false;
@@ -338,16 +350,16 @@ bool _isBuildRoutes(ConstantReader annotation) {
 
 /// 检测页面是否指定了路由分组
 String _findPageGroupName(ClassElement element, List group) {
-  if (element.metadata.length > 0) {
+  if (element.metadata.isNotEmpty) {
     for (final ea in element.metadata) {
       if (ea.element is ConstructorElement) {
-        ConstructorElement element = ea.element as ConstructorElement;
+        final element = ea.element as ConstructorElement;
         final name = element.returnType.element.name;
         final cr = ConstantReader(ea.computeConstantValue());
         // 如果使用注解`@pragma('build:routes', ['login'])`指定了某个分组
         final opts = cr.peek('options');
         if (_isBuildRoutes(cr) && opts != null && opts.isList) {
-          if (opts.listValue.length > 0) {
+          if (opts.listValue.isNotEmpty) {
             return opts.listValue[0].toStringValue();
           }
         }
@@ -390,7 +402,7 @@ Iterable<String> _findRoutesGroups(LibraryReader library, List group) sync* {
     for (final element in library.element.exports) {
       // 当前文件是否就是定义分组的地方
       final groupClass = element.exportedLibrary?.getType(group[0]);
-      if (groupClass != null && element.combinators.length > 0) {
+      if (groupClass != null && element.combinators.isNotEmpty) {
         final groupType = groupClass.thisType;
         for (final combinator in element.combinators) {
           if (combinator is ShowElementCombinator) {

@@ -218,6 +218,18 @@ class MyPageRoutes{
 class FirstPage extends StatelessWidget{
 }
 ```
+  此选项可以也可以在任何`routes`的子节点中，它将覆盖上述默认的配置
+```yaml
+targets:
+  $default:
+    builders:
+      routes_generator:
+        options:
+          group: "MyPageRoutes.group"
+          routes:
+            routes.dart:
+              group: "SubPageRoutes.group"
+```
 
 ### 忽略文件
 
@@ -240,4 +252,36 @@ targets:
           ignores:
             - "**/widgets/**" # 忽略所有`widgets`目录
             - "**.g.dart" # 忽略所有生成的文件
+```
+  此选项可以也可以在任何`routes`的子节点中，它将覆盖上述默认的配置。
+  也可以设置`false`来禁用此选项。
+```yaml
+targets:
+  $default:
+    builders:
+      routes_generator:
+        options:
+          ignores: "**.g.dart"
+          routes:
+            routes.dart:
+              ignores: "**/widgets/**"
+            dev/routes.dart:
+              ignores: false # disable ignore any files
+```
+
+### 动态路由
+
+  可以配置动态路由变量的后缀名。同样可以设置`false`来禁止生成动态路由。
+```yaml
+targets:
+  $default:
+    builders:
+      routes_generator:
+        options:
+          dynamic: 'Dynamic'
+          routes:
+            routes.dart:
+              dynamic: 'Dynamic'
+            dev/routes.dart:
+              dynamic: false # disable dynamic routes
 ```
