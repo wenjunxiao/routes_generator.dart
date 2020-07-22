@@ -44,7 +44,7 @@ class _MyAppState extends State<MyApp> {
       ),
       onGenerateRoute: (RouteSettings settings) {
         print('onGenerateRoute.routes => ${settings.name} ${routes.keys}');
-        WidgetBuilder builder = routes[settings.name];
+        var builder = routes[settings.name];
         if (builder == null) {
           print(
               'onGenerateRoute.authRoutes => ${settings.name} ${authRoutes.keys}');
