@@ -186,11 +186,13 @@ targets:
       routes_generator:
         options:
           ext: ".my.dart" # 修改后缀名
+          prefix: "/app" # 给路由URL添加默认的前缀
           routes:
             my_routes.dart: # 修改路由标识的文件名
               name: "myRoutes" # 修改生成的变量名
               pages: "../view" # 修改路由页面的名称和相对位置
             dev/my_routes.dart: # 增加一个dev的路由配置
+              prefix: "/dev" # 给dev路由URL添加统一的前缀，覆盖默认的前缀/app
               name: "devRoutes" # dev路由表的变量名
               pages: "views" # 相对于`dev`目录中`my_routes.dart`的路由页面目录
 ```

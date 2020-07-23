@@ -83,7 +83,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 style: TextStyle(fontSize: 18),
               ),
               onPressed: () {
-                Navigator.of(context).pushNamed('/hosts');
+                Navigator.of(context).pushNamed('/dev/hosts');
               },
             ),
             OutlineButton(
@@ -92,7 +92,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 style: TextStyle(fontSize: 18),
               ),
               onPressed: () {
-                Navigator.of(context).pushNamed('/_not_dynamic');
+                Navigator.of(context).pushNamed('/dev/_not_dynamic');
               },
             ),
             OutlineButton(
@@ -101,7 +101,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 style: TextStyle(fontSize: 18),
               ),
               onPressed: () {
-                Navigator.of(context).pushNamed('/widgets/widget.g');
+                Navigator.of(context).pushNamed('/dev/widgets/widgets.g');
               },
             ),
             WidgetsComponent(),

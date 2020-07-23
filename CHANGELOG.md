@@ -1,3 +1,7 @@
+# 0.0.5
+- Add prefix option
+- Fix the relative path of ignored files
+
 # 0.0.4
 - Optimize configuration options
 - Add analysis options

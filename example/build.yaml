@@ -14,6 +14,7 @@ targets:
               group: '_RoutesGroup.name'
               ignores: '**/widgets/**'
             dev/routes.dart:
+              prefix: "/dev"
               name: "devRoutes"
               pages: "pages"
               group: '_RoutesGroup.name'

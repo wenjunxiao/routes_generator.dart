@@ -24,6 +24,7 @@ Builder routesBuilder([BuilderOptions options]) {
         ignores: _ensureList(config['ignores']),
         ext: config['ext'] ?? '.map.dart',
         dynamicSuffix: _ensureString(config['dynamic'] ?? 'Dynamic'),
+        prefix: config['prefix'] ?? '',
       ),
       generatedExtension: config['ext'] ?? '.map.dart');
 }
@@ -73,18 +74,20 @@ class RoutesGenerator implements Generator {
   final List<String> keys;
   final String _ext;
   final String _dynamicSuffix;
+  final String _prefix;
 
-  RoutesGenerator(
-      {Map<String, dynamic> routes,
-      String group,
-      dynamic ignores,
-      String ext,
-      String dynamicSuffix,
-      bool matcher})
-      : _routes = routes ?? const {},
+  RoutesGenerator({
+    Map<String, dynamic> routes,
+    String group,
+    dynamic ignores,
+    String ext,
+    String dynamicSuffix,
+    String prefix,
+  })  : _routes = routes ?? const {},
         _group = group ?? '_RoutesGroup.name',
         _ignores = ignores,
         _ext = ext,
+        _prefix = prefix ?? '',
         _dynamicSuffix = dynamicSuffix ?? 'Dynamic',
         keys = routes?.keys?.toList() ?? [] {
     /**
@@ -152,15 +155,18 @@ class RoutesGenerator implements Generator {
         final base = p.normalize(p.dirname(buildStep.inputId.path));
         final pages = p.normalize(p.join(base, opts['pages'] ?? 'pages'));
         final ignores = _ensureList(opts['ignores'] ?? _ignores);
+        final prefix = opts['prefix'] ?? _prefix;
         final pattern = p.join(pages, '**.dart');
-        log.fine('match rule [$key], pattern=$pattern');
+        log.fine('match rule [$key], pattern=$pattern, ignores=$ignores');
         // 查找pages目录及其子目录所有dart文件
         final assetIds = await buildStep.findAssets(Glob(pattern)).toList()
           ..sort();
         final ignoreIds = <String, bool>{};
         final groupMap = <String, Map<String, String>>{};
+        final pagesBase = p.dirname(pages);
         for (final ignore in ignores) {
-          final pattern = p.join(base, ignore);
+          final pattern = p.join(pagesBase, ignore);
+          log.fine('ignore pattern => $pattern');
           await buildStep.findAssets(Glob(pattern)).forEach((id) {
             ignoreIds[id.path] = true;
           });
@@ -171,7 +177,7 @@ class RoutesGenerator implements Generator {
           final lib = await buildStep.resolver.libraryFor(assetId);
           if (ignoreIds.containsKey(assetId.path)) continue;
           var url = assetId.changeExtension('').path;
-          final origUrl = '/${p.relative(url, from: pages)}';
+          final origUrl = '$prefix/${p.relative(url, from: pages)}';
           var parameterized = false;
           final params = <String, String>{};
           if (_dynamic.isNotEmpty) {

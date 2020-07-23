@@ -197,11 +197,13 @@ targets:
       routes_generator:
         options:
           ext: ".my.dart" # change generated file extension
+          prefix: "/app" # add default prefix `/app` to route url
           routes:
             my_routes.dart: # change routes file
               name: "myRoutes" # change the variable name 
               pages: "../views" # change pages location
             dev/my_routes.dart:
+              prefix: "/dev" # add prefix to dev route url, override default prefix `/app`
               name: "devRoutes"
               pages: "views"
 ```

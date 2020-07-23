@@ -10,9 +10,9 @@ import 'pages/hosts.dart';
 import 'pages/widgets/widgets.g.dart';
 
 Map<String, WidgetBuilder> devRoutes = {
-  '/_not_dynamic': (context) => NotDynamicPage(),
-  '/hosts': (context) => HostsPage(),
-  '/widgets/widgets.g': (context) => WidgetsPage(),
+  '/dev/_not_dynamic': (context) => NotDynamicPage(),
+  '/dev/hosts': (context) => HostsPage(),
+  '/dev/widgets/widgets.g': (context) => WidgetsPage(),
 };
 
 Map<String, WidgetBuilder> authRoutes = {};
